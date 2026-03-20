@@ -6,6 +6,7 @@ import CanvasTimeline, {
   ITransition
 } from "@designcombo/timeline";
 import { PlayerRef } from "@remotion/player";
+import type { RefObject } from "react";
 import { create } from "zustand";
 
 interface ITimelineStore {
@@ -24,8 +25,8 @@ interface ITimelineStore {
   setTimeline: (timeline: CanvasTimeline) => void;
   setScale: (scale: ITimelineScaleState) => void;
   setScroll: (scroll: ITimelineScrollState) => void;
-  playerRef: React.RefObject<PlayerRef> | null;
-  setPlayerRef: (playerRef: React.RefObject<PlayerRef> | null) => void;
+  playerRef: RefObject<PlayerRef | null> | null;
+  setPlayerRef: (playerRef: RefObject<PlayerRef | null> | null) => void;
 
   setState: (state: any) => Promise<void>;
 }
@@ -68,7 +69,7 @@ const useStore = create<ITimelineStore>((set) => ({
   setState: async (state) => {
     return set({ ...state });
   },
-  setPlayerRef: (playerRef: React.RefObject<PlayerRef> | null) =>
+  setPlayerRef: (playerRef: RefObject<PlayerRef | null> | null) =>
     set({ playerRef })
 }));
 

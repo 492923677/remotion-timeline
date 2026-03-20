@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ADD_AUDIO,
   ADD_IMAGE,
@@ -6,7 +8,7 @@ import {
   dispatch
 } from "@designcombo/events";
 import { Button } from "./components/ui/button";
-import { useRef } from "react";
+import { useRef, useState, type RefObject } from "react";
 import Timeline from "./components/timeline";
 import { generateId } from "@designcombo/timeline";
 import { DEFAULT_FONT } from "./constants/font";
@@ -15,74 +17,127 @@ import useStore from "./store/store";
 import useTimelineEvents from "./hooks/use-timeline-events";
 
 const App = () => {
-  const { playerRef } = useStore();
+  const { playerRef, trackItemIds, trackItemsMap, duration, fps } = useStore();
   useTimelineEvents();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
+  const openPicker = (inputRef: RefObject<HTMLInputElement | null>) => {
+    inputRef.current?.click();
   };
-  const handleFileUpload = async (files: File[]) => {
-    const resourceId = "VMJQit9N0hJaCAss";
 
-    dispatch(ADD_VIDEO, {
-      payload: {
-        id: resourceId,
-        display: {
-          from: 2000,
-          to: 7000
-        },
-        details: {
-          src: URL.createObjectURL(files[0]),
-          name: files[0].name
-        },
-        metadata: {
-          resourceId
-        }
-      }
+  const uploadFile = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
     });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(payload?.error || "Upload failed");
+    }
+
+    const payload = (await response.json()) as { path: string };
+    return new URL(payload.path, window.location.origin).toString();
   };
 
-  const handleFileChange = (newFiles: File[]) => {
-    handleFileUpload(newFiles);
+  const handleImportImage = async (files: File[]) => {
+    const [file] = files;
+    if (!file) return;
+    setIsUploading(true);
+    setStatusMessage("Uploading image...");
+
+    try {
+      const src = await uploadFile(file);
+
+      dispatch(ADD_IMAGE, {
+        payload: {
+          id: generateId(),
+          details: {
+            src,
+            name: file.name
+          }
+        }
+      });
+      setStatusMessage(null);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Image upload failed"
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const handleAddImage = () => {
-    dispatch(ADD_IMAGE, {
-      payload: {
-        id: generateId(),
-        details: {
-          src: "https://designcombo.imgix.net/images/sample-image.jpg"
+  const handleImportVideo = async (files: File[]) => {
+    const [file] = files;
+    if (!file) return;
+    setIsUploading(true);
+    setStatusMessage("Uploading video...");
+
+    try {
+      const src = await uploadFile(file);
+      const resourceId = generateId();
+
+      dispatch(ADD_VIDEO, {
+        payload: {
+          id: generateId(),
+          details: {
+            src,
+            name: file.name,
+            volume: 50
+          },
+          metadata: {
+            resourceId
+          }
         }
-      }
-    });
+      });
+      setStatusMessage(null);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Video upload failed"
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const handleAddVideo = () => {
-    const resourceId = "VMJQit9N0hJaCAss";
-    dispatch(ADD_VIDEO, {
-      payload: {
-        id: generateId(),
-        details: {
-          src: "https://designcombo.imgix.net/videos/sample-video.mp4",
-          volume: 50
-        },
-        metadata: {
-          resourceId
+  const handleImportAudio = async (files: File[]) => {
+    const [file] = files;
+    if (!file) return;
+    setIsUploading(true);
+    setStatusMessage("Uploading audio...");
+
+    try {
+      const src = await uploadFile(file);
+
+      dispatch(ADD_AUDIO, {
+        payload: {
+          id: generateId(),
+          details: {
+            src,
+            name: file.name,
+            volume: 50
+          }
         }
-      }
-    });
-  };
-  const handleAddAudio = () => {
-    dispatch(ADD_AUDIO, {
-      payload: {
-        id: generateId(),
-        details: {
-          src: "https://designcombo.imgix.net/audios/stop-in-the-name-of-love.mp3",
-          volume: 50
-        }
-      }
-    });
+      });
+      setStatusMessage(null);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Audio upload failed"
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleAddText = () => {
@@ -105,6 +160,49 @@ const App = () => {
 
   const openLink = (url: string) => {
     window.open(url, "_blank"); // '_blank' will open the link in a new tab
+  };
+
+  const handleRenderVideo = async () => {
+    setIsRendering(true);
+    setStatusMessage("Rendering video...");
+
+    try {
+      const response = await fetch("/api/render", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          trackItemIds,
+          trackItemsMap,
+          duration,
+          fps
+        })
+      });
+
+      const payload = (await response.json()) as {
+        downloadUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.downloadUrl) {
+        throw new Error(payload.error || "Render failed");
+      }
+
+      const link = document.createElement("a");
+      link.href = payload.downloadUrl;
+      link.download = payload.downloadUrl.split("/").pop() || "render.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setStatusMessage("Render complete. Download started.");
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Render request failed"
+      );
+    } finally {
+      setIsRendering(false);
+    }
   };
 
   return (
@@ -136,29 +234,74 @@ const App = () => {
         </div>
         <div className="m-auto flex gap-2 py-8">
           <input
-            ref={fileInputRef}
-            id="file-upload-handle"
+            ref={imageInputRef}
             type="file"
-            accept="video/*"
-            onChange={(e) => handleFileChange(Array.from(e.target.files || []))}
+            accept="image/*"
+            onChange={(e) => {
+              handleImportImage(Array.from(e.target.files || []));
+              e.currentTarget.value = "";
+            }}
             className="hidden"
           />
-          <Button size={"sm"} onClick={handleClick} variant={"secondary"}>
-            Upload
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            onChange={(e) => {
+              handleImportVideo(Array.from(e.target.files || []));
+              e.currentTarget.value = "";
+            }}
+            className="hidden"
+          />
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept="audio/*"
+            onChange={(e) => {
+              handleImportAudio(Array.from(e.target.files || []));
+              e.currentTarget.value = "";
+            }}
+            className="hidden"
+          />
+          <Button
+            size={"sm"}
+            onClick={() => openPicker(imageInputRef)}
+            variant={"secondary"}
+            disabled={isUploading || isRendering}
+          >
+            Import Image
           </Button>
-          <Button size={"sm"} onClick={handleAddImage} variant={"secondary"}>
-            Add Image
+          <Button
+            size={"sm"}
+            onClick={() => openPicker(videoInputRef)}
+            variant={"secondary"}
+            disabled={isUploading || isRendering}
+          >
+            Import Video
           </Button>
-          <Button size={"sm"} onClick={handleAddVideo} variant={"secondary"}>
-            Add Video
-          </Button>
-          <Button size={"sm"} onClick={handleAddAudio} variant={"secondary"}>
-            Add Audio
+          <Button
+            size={"sm"}
+            onClick={() => openPicker(audioInputRef)}
+            variant={"secondary"}
+            disabled={isUploading || isRendering}
+          >
+            Import Audio
           </Button>
           <Button size={"sm"} onClick={handleAddText} variant={"secondary"}>
             Add Text
           </Button>
+          <Button
+            size={"sm"}
+            onClick={handleRenderVideo}
+            variant={"secondary"}
+            disabled={isUploading || isRendering}
+          >
+            {isRendering ? "Rendering..." : "Render Video"}
+          </Button>
         </div>
+        {statusMessage ? (
+          <div className="pb-8 text-sm text-zinc-400">{statusMessage}</div>
+        ) : null}
       </div>
 
       {playerRef && <Timeline />}

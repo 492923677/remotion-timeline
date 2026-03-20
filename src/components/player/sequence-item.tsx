@@ -1,4 +1,5 @@
 import { ITrackItem } from "@designcombo/timeline";
+import type { ReactElement } from "react";
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence } from "remotion";
 
 const calculateFrames = (
@@ -18,7 +19,7 @@ type ItemType = "text" | "image" | "video" | "audio";
 
 export const SequenceItem: Record<
   ItemType,
-  (item: ITrackItem, options: SequenceItemOptions) => JSX.Element
+  (item: ITrackItem, options: SequenceItemOptions) => ReactElement
 > = {
   text: (item: ITrackItem, options: SequenceItemOptions) => {
     const { fps } = options;

@@ -1,19 +1,16 @@
 import useStore from "@/store/store";
-import { SequenceItem } from "./sequence-item";
-
-type ItemType = "text" | "image" | "video" | "audio";
+import { TimelineComposition } from "@/remotion/timeline-composition";
 
 const Composition = () => {
-  const { trackItemIds, trackItemsMap, fps } = useStore();
+  const { trackItemIds, trackItemsMap, fps, duration } = useStore();
+
   return (
-    <>
-      {trackItemIds.map((id) => {
-        const item = trackItemsMap[id];
-        return SequenceItem[item.type as ItemType](item, {
-          fps
-        });
-      })}
-    </>
+    <TimelineComposition
+      trackItemIds={trackItemIds}
+      trackItemsMap={trackItemsMap}
+      fps={fps}
+      duration={duration}
+    />
   );
 };
 
